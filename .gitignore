@@ -1,0 +1,10 @@
+# Archivos de resultados de escaneos (¡Datos sensibles!)
+scan_result.xml
+*.xml
+
+# Archivos de caché de Python
+__pycache__/
+*.pyc
+
+# Archivos basura de macOS
+.DS_Store
