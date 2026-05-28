@@ -8,3 +8,6 @@ __pycache__/
 
 # Archivos basura de macOS
 .DS_Store
+
+# Entorno virtual de Python
+.venv/
