@@ -11,3 +11,6 @@ __pycache__/
 
 # Entorno virtual de Python
 .venv/
+
+# Reportes generados (Datos Sensibles)
+*.html

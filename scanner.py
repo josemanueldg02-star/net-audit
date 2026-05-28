@@ -4,6 +4,7 @@ import os
 import requests
 import urllib.parse
 import time
+from datetime import datetime
 
 
 def ejecutar_escaneo(target_ip):
@@ -15,34 +16,23 @@ def ejecutar_escaneo(target_ip):
         subprocess.run(
             comando, check=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL
         )
-        print("[+] Escaneo completado. Archivo de datos generado con éxito.")
+        print("[+] Escaneo Nmap completado.")
         return archivo_salida
     except subprocess.CalledProcessError as e:
         print(f"[-] Error al ejecutar Nmap: {e}")
         return None
     except FileNotFoundError:
-        print("[-] Error crítico: Nmap no está instalado en el sistema.")
+        print("[-] Error crítico: Nmap no está instalado.")
         return None
 
 
 def buscar_vulnerabilidades(software):
-    """
-    Se conecta a la API pública del NIST (Gobierno de EEUU) para buscar
-    vulnerabilidades (CVEs) asociadas a un software específico.
-    """
-    print(f"    [*] Consultando bases de datos de vulnerabilidades para: {software}...")
-
-    # Codificamos el texto para URLs (ej. "PostgreSQL 14" -> "PostgreSQL%2014")
+    print(f"    [*] Consultando base de datos NVD para: {software}...")
     keyword = urllib.parse.quote(software)
-    # Buscamos la palabra clave y limitamos a 3 resultados para no saturar la terminal
     url = f"https://services.nvd.nist.gov/rest/json/cves/2.0?keywordSearch={keyword}&resultsPerPage=3"
 
     try:
-        # TÁCTICA DEVSECOPS: Rate Limiting
-        # La API del gobierno bloquea a quien hace muchas peticiones seguidas sin una API Key.
-        # Le decimos a Python que "respire" 6 segundos antes de consultar para evitar ser baneados.
-        time.sleep(6)
-
+        time.sleep(6)  # Rate limiting para evitar bloqueos del servidor
         headers = {"User-Agent": "NetAudit-DevSecOps-Project"}
         response = requests.get(url, headers=headers, timeout=15)
 
@@ -50,13 +40,11 @@ def buscar_vulnerabilidades(software):
             datos = response.json()
             vulnerabilidades = []
 
-            # Extraemos los datos de los CVEs encontrados
             for item in datos.get("vulnerabilities", []):
                 cve_id = item.get("cve", {}).get("id", "Desconocido")
                 descripciones = item.get("cve", {}).get("descriptions", [])
                 descripcion = "Sin descripción"
 
-                # Buscamos la descripción en inglés ("en")
                 for d in descripciones:
                     if d.get("lang") == "en":
                         descripcion = d.get("value")
@@ -64,90 +52,148 @@ def buscar_vulnerabilidades(software):
 
                 vulnerabilidades.append({"id": cve_id, "descripcion": descripcion})
             return vulnerabilidades
-        else:
-            return []
+        return []
     except Exception as e:
         print(f"[-] Error de conexión con NVD: {e}")
         return []
 
 
-def analizar_resultados_xml(archivo_xml):
-    print("[*] Procesando puertos y analizando vulnerabilidades potenciales...")
+def generar_reporte_html(resultados, ip_objetivo):
+    """
+    Toma los datos procesados y construye un archivo HTML corporativo
+    inyectando variables de Python dentro de la estructura web.
+    """
+    print("\n[*] Generando reporte corporativo en formato HTML...")
+    fecha_actual = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+
+    # Iniciamos la plantilla HTML con CSS incrustado para darle estilo corporativo
+    html = f"""
+    <!DOCTYPE html>
+    <html lang="es">
+    <head>
+        <meta charset="UTF-8">
+        <title>Reporte de Auditoría DevSecOps</title>
+        <style>
+            body {{ font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; margin: 40px; background-color: #f4f6f9; color: #333; }}
+            h1 {{ color: #2c3e50; border-bottom: 3px solid #3498db; padding-bottom: 10px; }}
+            .resumen {{ background: #fff; padding: 20px; border-radius: 8px; box-shadow: 0 4px 6px rgba(0,0,0,0.1); margin-bottom: 30px; border-left: 5px solid #3498db; }}
+            table {{ width: 100%; border-collapse: collapse; background: #fff; box-shadow: 0 4px 6px rgba(0,0,0,0.1); border-radius: 8px; overflow: hidden; }}
+            th, td {{ padding: 15px; text-align: left; border-bottom: 1px solid #ecf0f1; }}
+            th {{ background-color: #2c3e50; color: white; text-transform: uppercase; font-size: 0.9em; }}
+            tr:hover {{ background-color: #f9f9f9; }}
+            .badge-safe {{ background-color: #2ecc71; color: white; padding: 6px 12px; border-radius: 20px; font-size: 0.85em; font-weight: bold; }}
+            .badge-danger {{ background-color: #e74c3c; color: white; padding: 6px 12px; border-radius: 20px; font-size: 0.85em; font-weight: bold; }}
+            .badge-warning {{ background-color: #f39c12; color: white; padding: 6px 12px; border-radius: 20px; font-size: 0.85em; font-weight: bold; }}
+            .cve-list {{ margin-top: 10px; padding-left: 20px; font-size: 0.9em; color: #c0392b; }}
+        </style>
+    </head>
+    <body>
+        <h1>🛡️ Reporte de Auditoría de Red (NetAudit)</h1>
+        <div class="resumen">
+            <p><strong>Fecha de escaneo:</strong> {fecha_actual}</p>
+            <p><strong>Objetivo auditado:</strong> {ip_objetivo}</p>
+        </div>
+        <table>
+            <tr>
+                <th>Puerto / Protocolo</th>
+                <th>Servicio Identificado</th>
+                <th>Estado de Seguridad</th>
+            </tr>
+    """
+
+    # Recorremos cada puerto y creamos una fila en la tabla HTML dinámicamente
+    for srv in resultados:
+        html += f"<tr><td><strong>{srv['puerto']}/{srv['protocolo']}</strong></td><td>{srv['software']}</td><td>"
+
+        if "Servicio:" in srv["software"] or srv["software"] == "Desconocido":
+            html += "<span class='badge-warning'>⚠️ Requiere versión exacta</span>"
+        elif not srv["cves"]:
+            html += "<span class='badge-safe'>✅ Seguro (0 CVEs)</span>"
+        else:
+            html += f"<span class='badge-danger'>❌ {len(srv['cves'])} Vulnerabilidades</span>"
+            html += "<ul class='cve-list'>"
+            for cve in srv["cves"]:
+                desc = (
+                    cve["descripcion"][:100] + "..."
+                    if len(cve["descripcion"]) > 100
+                    else cve["descripcion"]
+                )
+                html += f"<li><strong>{cve['id']}:</strong> {desc}</li>"
+            html += "</ul>"
+
+        html += "</td></tr>"
+
+    html += """
+        </table>
+        <p style="text-align: center; margin-top: 40px; font-size: 0.8em; color: #95a5a6;">
+            Generado automáticamente por NetAudit - Herramienta DevSecOps
+        </p>
+    </body>
+    </html>
+    """
+
+    # Guardamos todo ese texto HTML en un archivo físico
+    nombre_archivo = "reporte_auditoria.html"
+    with open(nombre_archivo, "w", encoding="utf-8") as file:
+        file.write(html)
+    print(
+        f"[+] ¡Reporte HTML generado con éxito! Puedes abrir '{nombre_archivo}' en tu navegador."
+    )
+
+
+def analizar_resultados_xml(archivo_xml, ip_objetivo):
+    print("[*] Procesando resultados y buscando vulnerabilidades en internet...")
     if not os.path.exists(archivo_xml):
-        print("[-] No se encontró el archivo de resultados.")
         return
 
     tree = ET.parse(archivo_xml)
     root = tree.getroot()
-    servicios_encontrados = []
+    datos_completos = []
 
     for host in root.findall("host"):
         for ports in host.findall("ports"):
             for port in ports.findall("port"):
-                estado = port.find("state").get("state")
-                if estado == "open":
+                if port.find("state").get("state") == "open":
                     puerto_num = port.get("portid")
                     protocolo = port.get("protocol")
                     servicio = port.find("service")
 
                     if servicio is not None:
-                        nombre_servicio = servicio.get("name", "Desconocido")
+                        nombre = servicio.get("name", "Desconocido")
                         producto = servicio.get("product", "")
                         version = servicio.get("version", "")
-
-                        software_completo = f"{producto} {version}".strip()
-                        if not software_completo:
-                            software_completo = f"Servicio: {nombre_servicio}"
+                        software = (
+                            f"{producto} {version}".strip() or f"Servicio: {nombre}"
+                        )
                     else:
-                        software_completo = "Desconocido"
+                        software = "Desconocido"
 
-                    servicios_encontrados.append(
+                    # Buscamos los CVEs antes de guardar los datos
+                    cves_encontrados = []
+                    if "Servicio:" not in software and software != "Desconocido":
+                        cves_encontrados = buscar_vulnerabilidades(software)
+
+                    # Guardamos toda la información de este puerto en nuestro diccionario
+                    datos_completos.append(
                         {
                             "puerto": puerto_num,
                             "protocolo": protocolo,
-                            "software": software_completo,
+                            "software": software,
+                            "cves": cves_encontrados,
                         }
                     )
 
-    # IMPRESIÓN DEL REPORTE FINAL CON VULNERABILIDADES
-    print("\n" + "=" * 60)
-    print(" REPORTE DE PUERTOS, SERVICIOS Y VULNERABILIDADES (CVEs)")
-    print("=" * 60)
-    if not servicios_encontrados:
-        print("No se encontraron puertos abiertos. El sistema está blindado.")
-    else:
-        for srv in servicios_encontrados:
-            print(
-                f"\n [+] Puerto {srv['puerto']}/{srv['protocolo']} -> {srv['software']}"
-            )
+    # Imprimimos en terminal para el "modo hacker" y generamos el HTML para el "modo jefe"
+    for srv in datos_completos:
+        print(
+            f"\n [+] Puerto {srv['puerto']} -> {srv['software']} | CVEs: {len(srv['cves'])}"
+        )
 
-            # Solo buscamos vulnerabilidades si Nmap logró adivinar la versión exacta
-            if "Servicio:" not in srv["software"] and srv["software"] != "Desconocido":
-                cves = buscar_vulnerabilidades(srv["software"])
-                if cves:
-                    print("     ⚠️  Vulnerabilidades conocidas encontradas:")
-                    for cve in cves:
-                        # Recortamos la descripción a 100 caracteres para no llenar toda la pantalla
-                        desc_corta = (
-                            cve["descripcion"][:100] + "..."
-                            if len(cve["descripcion"]) > 100
-                            else cve["descripcion"]
-                        )
-                        print(f"        - {cve['id']}: {desc_corta}")
-                else:
-                    print(
-                        "     ✅ No se encontraron vulnerabilidades críticas recientes."
-                    )
-            else:
-                print(
-                    "     ℹ️  Se necesita la versión exacta del software para buscar vulnerabilidades."
-                )
-    print("=" * 60 + "\n")
+    generar_reporte_html(datos_completos, ip_objetivo)
 
 
 if __name__ == "__main__":
     IP_OBJETIVO = "127.0.0.1"
     xml_generado = ejecutar_escaneo(IP_OBJETIVO)
-
     if xml_generado:
-        analizar_resultados_xml(xml_generado)
+        analizar_resultados_xml(xml_generado, IP_OBJETIVO)
