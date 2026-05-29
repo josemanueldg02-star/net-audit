@@ -6,7 +6,7 @@
 
 Una herramienta de auditoría automatizada desarrollada en Python para escanear redes locales, identificar servicios activos y cruzar la información en tiempo real con la **Base de Datos Nacional de Vulnerabilidades (NVD)** del gobierno de Estados Unidos. Diseñada para generar reportes corporativos limpios y visuales de forma autónoma.
 
-## 🌟 Características Principales
+## Características Principales
 
 * **Orquestación de Nmap:** Uso del módulo `subprocess` de Python para invocar escaneos de red silenciosos en segundo plano y extraer versiones exactas de software.
 * **Procesamiento de Datos Complejos:** Análisis y *parsing* de grandes volúmenes de datos en formato XML (`xml.etree.ElementTree`) generados por el escáner de red.
@@ -14,14 +14,14 @@ Una herramienta de auditoría automatizada desarrollada en Python para escanear 
 * **Tácticas DevSecOps:** Implementación de *Rate Limiting* (control de peticiones) para evitar bloqueos por parte de los servidores gubernamentales al realizar múltiples consultas.
 * **Generación Dinámica de Reportes:** Creación automatizada de informes de auditoría en formato **HTML** mediante inyección de variables (f-strings) y CSS incrustado, ideal para presentar a clientes o equipos técnicos.
 
-## 🛠️ Stack Tecnológico
+## Stack Tecnológico
 
 * **Lenguaje Core:** Python 3
 * **Motor de Escaneo:** Nmap (Network Mapper)
 * **Peticiones HTTP:** Librería `requests`
 * **Formatos de Datos:** XML, JSON, HTML
 
-## 🚀 Instalación y Despliegue Local
+## Instalación y Despliegue Local
 
 1. **Requisitos previos:**
    Asegúrate de tener instalado Python 3 y el motor Nmap en tu sistema operativo (ej. `brew install nmap` en macOS).
